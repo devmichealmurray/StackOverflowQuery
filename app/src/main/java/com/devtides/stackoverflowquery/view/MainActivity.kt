@@ -6,14 +6,16 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Observer
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.devtides.stackoverflowquery.R
+import com.devtides.stackoverflowquery.model.Question
 import com.devtides.stackoverflowquery.viewmodel.QuestionsViewModel
 import kotlinx.android.synthetic.main.activity_main.*
 
+class MainActivity : AppCompatActivity(), QuestionClickListener {
 
-class MainActivity : AppCompatActivity() {
-
-    private val questionsAdapter = QuestionsAdapter(arrayListOf())
+    val questionsAdapter =
+        QuestionsAdapter(arrayListOf(), this)
     private val viewModel: QuestionsViewModel by viewModels()
     private val lm = LinearLayoutManager(this)
 
@@ -25,11 +27,31 @@ class MainActivity : AppCompatActivity() {
         questions_list.apply {
             layoutManager = lm
             adapter = questionsAdapter
+            addOnScrollListener(object: RecyclerView.OnScrollListener() {
+                override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                    if (dy > 0) {
+                        val childCount = questionsAdapter.itemCount
+                        val lastPosition = lm.findLastCompletelyVisibleItemPosition()
+                        if (childCount - 1 == lastPosition
+                            && loading_view.visibility == View.GONE) {
+                                loading_view.visibility = View.VISIBLE
+                                viewModel.getNextPage()
+                        }
+                    }
+                }
+            })
         }
 
         observeViewModel()
 
-        viewModel.getQuestions()
+        viewModel.getNextPage()
+
+        swipe_layout.setOnRefreshListener {
+            questionsAdapter.clearQuestions()
+            viewModel.getFirstPage()
+            loading_view.visibility = View.VISIBLE
+            questions_list.visibility = View.GONE
+        }
     }
 
 
@@ -37,6 +59,7 @@ class MainActivity : AppCompatActivity() {
         viewModel.questionsResponse.observe(this, Observer { items ->
             items?.let {
                 questions_list.visibility = View.VISIBLE
+                swipe_layout.isRefreshing = false
                 questionsAdapter.addQuestions(it)
             }
         })
@@ -55,5 +78,9 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
+    }
+
+    override fun onQuestionClicked(question: Question) {
+        startActivity(DetailActivity.getIntent(this, question))
     }
 }
